@@ -15,8 +15,8 @@ import { Download, Upload, Trash2, Pencil, RefreshCcw } from "lucide-react";
 
 /* ---------------------------------------------------------
    UI “portable” (sin shadcn/ui, sin alias @/components)
-   - Esto hace que el archivo funcione en cualquier template React/TS
-   - Estilos: simples e inline (sobrios) para que se vea prolijo
+   - Esto hace que el archivo funcione en CRA / Vercel
+   - Estilos: sobrios, inline + clases no rompen si no existe Tailwind
 --------------------------------------------------------- */
 
 const ui = {
@@ -149,32 +149,68 @@ function CardHeader({ children }: { children: React.ReactNode }) {
 function CardTitle({ children }: { children: React.ReactNode }) {
   return <div style={ui.hTitle}>{children}</div>;
 }
-function CardContent({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <div style={{ ...ui.cardContent, ...style }}>{children}</div>;
+function CardContent({ children, style, className }: { children: React.ReactNode; style?: React.CSSProperties; className?: string }) {
+  return <div className={className} style={{ ...ui.cardContent, ...style }}>{children}</div>;
 }
 
-function Button({ children, onClick, variant, disabled, style, type }: any) {
+function Button({ children, onClick, variant, disabled, style, type, className, size }: any) {
   const base = variant === "destructive" ? ui.buttonDanger : variant === "primary" ? ui.buttonPrimary : ui.button;
+  const sizeStyle =
+    size === "icon"
+      ? { padding: 10, width: 40, height: 40, justifyContent: "center" }
+      : {};
   return (
-    <button type={type || "button"} onClick={onClick} disabled={disabled} style={{ ...base, opacity: disabled ? 0.6 : 1, ...style }}>
+    <button
+      type={type || "button"}
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+      style={{ ...base, ...sizeStyle, opacity: disabled ? 0.6 : 1, ...style }}
+    >
       {children}
     </button>
   );
 }
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} style={{ ...ui.input, ...(props.style || {}) }} />;
+function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { className?: string }) {
+  return <input {...props} className={props.className} style={{ ...ui.input, ...(props.style || {}) }} />;
 }
-function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} style={{ ...ui.input, minHeight: 88, ...(props.style || {}) }} />;
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { className?: string }) {
+  return <textarea {...props} className={props.className} style={{ ...ui.input, minHeight: 88, ...(props.style || {}) }} />;
 }
-function Label({ children }: { children: React.ReactNode }) {
-  return <div style={ui.label}>{children}</div>;
+function Label({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={className} style={ui.label}>{children}</div>;
 }
-function Badge({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <span style={{ ...ui.badge, ...style }}>{children}</span>;
+
+/** ✅ FIX CLAVE: Badge acepta variant + className (evita el error TS2322 en Vercel) */
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | string;
+function Badge({
+  children,
+  style,
+  className,
+  variant,
+  ...rest
+}: React.HTMLAttributes<HTMLSpanElement> & {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+  variant?: BadgeVariant;
+}) {
+  const variantStyle: React.CSSProperties =
+    variant === "destructive"
+      ? { background: "rgba(225, 29, 72, 0.10)", borderColor: "rgba(225, 29, 72, 0.35)", color: "rgba(159, 18, 57, 1)" }
+      : variant === "secondary"
+        ? { background: "rgba(2, 132, 199, 0.10)", borderColor: "rgba(2, 132, 199, 0.30)", color: "rgba(3, 105, 161, 1)" }
+        : variant === "outline"
+          ? { background: "transparent" }
+          : {};
+  return (
+    <span {...rest} className={className} style={{ ...ui.badge, ...variantStyle, ...(style || {}) }}>
+      {children}
+    </span>
+  );
 }
-function Separator() {
-  return <div style={ui.sep} />;
+
+function Separator({ className }: { className?: string }) {
+  return <div className={className} style={ui.sep} />;
 }
 function Switch({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (v: boolean) => void }) {
   return (
@@ -198,7 +234,6 @@ function SelectValue({ placeholder }: any) {
   return <span style={{ color: "rgba(0,0,0,0.6)" }}>{placeholder}</span>;
 }
 function SelectContent({ children, value, onValueChange }: any) {
-  // Convertimos SelectItem a <option>
   const options: Array<{ value: string; label: string }> = [];
   React.Children.forEach(children, (ch) => {
     if (!React.isValidElement(ch)) return;
@@ -225,8 +260,22 @@ function Tabs({ value, onValueChange, children }: any) {
   const ctx = useMemo(() => ({ value, setValue: onValueChange }), [value, onValueChange]);
   return <TabsCtx.Provider value={ctx}>{children}</TabsCtx.Provider>;
 }
-function TabsList({ children }: any) {
-  return <div style={{ display: "inline-flex", gap: 8, padding: 6, borderRadius: 14, border: "1px solid rgba(0,0,0,0.10)", background: "rgba(255,255,255,0.8)" }}>{children}</div>;
+function TabsList({ children, className }: any) {
+  return (
+    <div
+      className={className}
+      style={{
+        display: "inline-flex",
+        gap: 8,
+        padding: 6,
+        borderRadius: 14,
+        border: "1px solid rgba(0,0,0,0.10)",
+        background: "rgba(255,255,255,0.8)",
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 function TabsTrigger({ value, children }: any) {
   const ctx = useContext(TabsCtx)!;
@@ -261,7 +310,12 @@ function Dialog({ children }: { children: React.ReactNode }) {
 function DialogTrigger({ asChild, children }: any) {
   const ctx = useContext(DialogCtx)!;
   if (asChild && React.isValidElement(children)) {
-    return React.cloneElement(children as any, { onClick: (e: any) => { (children as any).props?.onClick?.(e); ctx.setOpen(true); } });
+    return React.cloneElement(children as any, {
+      onClick: (e: any) => {
+        (children as any).props?.onClick?.(e);
+        ctx.setOpen(true);
+      },
+    });
   }
   return <button onClick={() => ctx.setOpen(true)}>{children}</button>;
 }
@@ -342,12 +396,12 @@ function TableCell({ children, className, colSpan, style, title }: any) {
   );
 }
 
-
 /**
  * Finanzas del Hogar (2026)
  * - 2 pestañas: Carga + Dashboard
  * - Presupuestos por categoría (mensuales) con progreso/colores (ARS)
  * - USD real separado: se carga y se visualiza como una economía aparte (sin conversión)
+ * - Ahorros: siempre USD
  * - Persistencia: localStorage
  * - Colaboración opcional: Supabase + Realtime
  */
@@ -382,14 +436,13 @@ const CATEGORIES_POSITIVE = ["Ingresos Javi", "Ingresos Miki", "Ahorro"] as cons
 const ALL_CATEGORIES = [...CATEGORIES_EXPENSE, ...CATEGORIES_POSITIVE] as const;
 
 type Category = (typeof ALL_CATEGORIES)[number];
-
 type Currency = "ARS" | "USD";
 
 type Entry = {
   id: string;
   category: Category;
   currency: Currency;
-  amount: number; // monto en la moneda indicada
+  amount: number;
   date: string; // YYYY-MM-DD
   comment?: string;
   createdAt: number;
@@ -421,39 +474,21 @@ const DEFAULT_COLLAB: CollaborationConfig = {
 const USD_CATEGORY: Category = "Gastos en USD";
 const SAVINGS_CATEGORY: Category = "Ahorro";
 
-const ARS_EXPENSE_CATEGORIES = (CATEGORIES_EXPENSE as readonly Category[]).filter(
-  (c) => c !== USD_CATEGORY
-);
+const ARS_EXPENSE_CATEGORIES = (CATEGORIES_EXPENSE as readonly Category[]).filter((c) => c !== USD_CATEGORY);
 
 // ------------------ Utils ------------------
 
 function uid() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
-
 function toMonthKey(dateYYYYMMDD: string) {
   return dateYYYYMMDD.slice(0, 7);
 }
-
 function monthLabel(monthKey: string) {
   const [y, m] = monthKey.split("-").map((x) => parseInt(x, 10));
-  const months = [
-    "Ene",
-    "Feb",
-    "Mar",
-    "Abr",
-    "May",
-    "Jun",
-    "Jul",
-    "Ago",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dic",
-  ];
+  const months = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   return `${months[(m || 1) - 1]} ${y}`;
 }
-
 function prevMonthKey(monthKey: string) {
   const [yStr, mStr] = monthKey.split("-");
   const y = parseInt(yStr, 10);
@@ -465,47 +500,31 @@ function prevMonthKey(monthKey: string) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `${yy}-${mm}`;
 }
-
 function formatMoneyARS(n: number) {
   try {
-    return new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-      maximumFractionDigits: 0,
-    }).format(n);
+    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
   } catch {
     return `$ ${Math.round(n).toLocaleString("es-AR")}`;
   }
 }
-
 function formatMoneyUSD(n: number) {
   const val = Number.isFinite(n) ? n : 0;
   return `$ ${val.toFixed(2)} USD`;
 }
-
 function safeNumber(input: string) {
-  const cleaned = input
-    .trim()
-    .replace(/\./g, "")
-    .replace(/,/g, ".")
-    .replace(/[^0-9.-]/g, "");
+  const cleaned = input.trim().replace(/\./g, "").replace(/,/g, ".").replace(/[^0-9.-]/g, "");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
-
 function isExpense(cat: Category) {
   return (CATEGORIES_EXPENSE as readonly string[]).includes(cat);
 }
-
 function normalizeEntry(raw: any): Entry | null {
   if (!raw || !raw.id || !raw.category || !raw.date) return null;
 
   const category: Category = raw.category;
 
-  // Backward compat: versiones viejas traían amountARS y nada de currency/amount
   const legacyARS = Number(raw.amountARS);
-
-  // Si es categoría USD, asumimos USD.
   const inferredCurrency: Currency =
     raw.currency === "USD" || category === USD_CATEGORY || category === SAVINGS_CATEGORY ? "USD" : "ARS";
 
@@ -526,16 +545,12 @@ function normalizeEntry(raw: any): Entry | null {
     updatedAt: Number(raw.updatedAt) || Date.now(),
   };
 }
-
 function loadLocal(): { entries: Entry[]; budgets: Budget[]; collab: CollaborationConfig } {
   const raw = localStorage.getItem(APP_KEY);
   if (!raw) return { entries: [], budgets: [], collab: DEFAULT_COLLAB };
   try {
     const parsed = JSON.parse(raw);
-    const normalizedEntries: Entry[] = Array.isArray(parsed.entries)
-      ? parsed.entries.map(normalizeEntry).filter(Boolean)
-      : [];
-
+    const normalizedEntries: Entry[] = Array.isArray(parsed.entries) ? parsed.entries.map(normalizeEntry).filter(Boolean) : [];
     return {
       entries: normalizedEntries as Entry[],
       budgets: Array.isArray(parsed.budgets) ? parsed.budgets : [],
@@ -545,7 +560,6 @@ function loadLocal(): { entries: Entry[]; budgets: Budget[]; collab: Collaborati
     return { entries: [], budgets: [], collab: DEFAULT_COLLAB };
   }
 }
-
 function saveLocal(entries: Entry[], budgets: Budget[], collab: CollaborationConfig) {
   localStorage.setItem(APP_KEY, JSON.stringify({ entries, budgets, collab }));
 }
@@ -590,11 +604,7 @@ export default function FinanzasHogarApp() {
   const [monthFilter, setMonthFilter] = useState<string>(""); // "" = todos, "01".."12"
 
   const MONTHS_2026 = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => {
-        const mm = String(i + 1).padStart(2, "0");
-        return `2026-${mm}`;
-      }),
+    () => Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}`),
     []
   );
 
@@ -617,15 +627,10 @@ export default function FinanzasHogarApp() {
     []
   );
 
-  const monthKeyFromFilter = useMemo(
-    () => (monthFilter ? `2026-${monthFilter}` : ""),
-    [monthFilter]
-  );
-
-  // Lista fija de meses (2026)
+  const monthKeyFromFilter = useMemo(() => (monthFilter ? `2026-${monthFilter}` : ""), [monthFilter]);
   const months = useMemo(() => MONTHS_2026, [MONTHS_2026]);
 
-  // ------------------ Budgets lookup (DEBE estar ANTES de cualquier useMemo que llame a getBudget) ------------------
+  // ------------------ Budgets lookup (antes de cualquier uso) ------------------
   const budgetsById = useMemo(() => {
     const map = new Map<string, Budget>();
     for (const b of budgets) map.set(b.id, b);
@@ -635,11 +640,9 @@ export default function FinanzasHogarApp() {
   function budgetId(monthKey: string, cat: Category) {
     return `${monthKey}__${cat}`;
   }
-
   function getBudget(monthKey: string, cat: Category) {
     return budgetsById.get(budgetId(monthKey, cat));
   }
-
   function progressColorClass(pct: number) {
     if (pct >= 1) return "bg-rose-500";
     if (pct >= 0.8) return "bg-amber-500";
@@ -648,20 +651,17 @@ export default function FinanzasHogarApp() {
 
   // ------------ Persistencia local + Sync Supabase ------------
 
-  // cargar local al iniciar
   useEffect(() => {
     const { entries: e, budgets: b, collab: c } = loadLocal();
-    setEntries(e.sort((a, b2) => b2.date.localeCompare(a.date)));
+    setEntries((e as Entry[]).sort((a, b2) => b2.date.localeCompare(a.date)));
     setBudgets(b);
     setCollab(c);
   }, []);
 
-  // guardar local
   useEffect(() => {
     saveLocal(entries, budgets, collab);
   }, [entries, budgets, collab]);
 
-  // conectar/desconectar supabase
   useEffect(() => {
     let cancelled = false;
 
@@ -670,9 +670,7 @@ export default function FinanzasHogarApp() {
         if (channelRef.current && supabaseRef.current) {
           await supabaseRef.current.removeChannel(channelRef.current);
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
       channelRef.current = null;
       supabaseRef.current = null;
     }
@@ -700,20 +698,12 @@ export default function FinanzasHogarApp() {
         if (cancelled) return;
         supabaseRef.current = supabase;
 
-        // pull inicial
-        const { data: remoteEntries, error: eErr } = await supabase
-          .from("finance_entries")
-          .select("*")
-          .eq("room", collab.room);
+        const { data: remoteEntries, error: eErr } = await supabase.from("finance_entries").select("*").eq("room", collab.room);
         if (eErr) throw eErr;
 
-        const { data: remoteBudgets, error: bErr } = await supabase
-          .from("finance_budgets")
-          .select("*")
-          .eq("room", collab.room);
+        const { data: remoteBudgets, error: bErr } = await supabase.from("finance_budgets").select("*").eq("room", collab.room);
         if (bErr) throw bErr;
 
-        // merge local <- remoto (remoto gana por updatedAt)
         const mergedEntries = (() => {
           const map = new Map<string, Entry>();
           for (const it of entries) map.set(it.id, it);
@@ -750,7 +740,6 @@ export default function FinanzasHogarApp() {
           setBudgets(mergedBudgets);
         }
 
-        // realtime
         const ch = supabase
           .channel(`finanzas_${collab.room}`)
           .on(
@@ -819,7 +808,6 @@ export default function FinanzasHogarApp() {
       cancelled = true;
       cleanup();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collab.enabled, collab.supabaseUrl, collab.supabaseAnonKey, collab.room]);
 
   // ------------ Remote helpers ------------
@@ -828,9 +816,6 @@ export default function FinanzasHogarApp() {
     if (!collab.enabled || collabStatus !== "online" || !supabaseRef.current) return;
     const supabase = supabaseRef.current;
 
-    // Para mantener compatibilidad si tu tabla hoy solo tiene amountARS, dejamos amountARS cargado:
-    // - ARS: amountARS = amount
-    // - USD: amountUSD = amount, amountARS = 0 (no convertimos)
     const payload = {
       room: collab.room,
       id: e.id,
@@ -848,18 +833,12 @@ export default function FinanzasHogarApp() {
     const { error } = await supabase.from("finance_entries").upsert(payload, { onConflict: "id" });
     if (error) throw error;
   }
-
   async function deleteRemote(id: string) {
     if (!collab.enabled || collabStatus !== "online" || !supabaseRef.current) return;
     const supabase = supabaseRef.current;
-    const { error } = await supabase
-      .from("finance_entries")
-      .delete()
-      .eq("id", id)
-      .eq("room", collab.room);
+    const { error } = await supabase.from("finance_entries").delete().eq("id", id).eq("room", collab.room);
     if (error) throw error;
   }
-
   async function upsertBudgetRemote(b: Budget) {
     if (!collab.enabled || collabStatus !== "online" || !supabaseRef.current) return;
     const supabase = supabaseRef.current;
@@ -867,15 +846,10 @@ export default function FinanzasHogarApp() {
     const { error } = await supabase.from("finance_budgets").upsert(payload, { onConflict: "id" });
     if (error) throw error;
   }
-
   async function deleteBudgetRemote(id: string) {
     if (!collab.enabled || collabStatus !== "online" || !supabaseRef.current) return;
     const supabase = supabaseRef.current;
-    const { error } = await supabase
-      .from("finance_budgets")
-      .delete()
-      .eq("id", id)
-      .eq("room", collab.room);
+    const { error } = await supabase.from("finance_budgets").delete().eq("id", id).eq("room", collab.room);
     if (error) throw error;
   }
 
@@ -888,53 +862,22 @@ export default function FinanzasHogarApp() {
     const currency: Currency = category === USD_CATEGORY || category === SAVINGS_CATEGORY ? "USD" : "ARS";
 
     if (editing) {
-      const updated: Entry = {
-        ...editing,
-        category,
-        currency,
-        amount,
-        date,
-        comment,
-        updatedAt: Date.now(),
-      };
-      setEntries((prev) =>
-        prev
-          .map((x) => (x.id === updated.id ? updated : x))
-          .sort((a, b) => b.date.localeCompare(a.date))
-      );
+      const updated: Entry = { ...editing, category, currency, amount, date, comment, updatedAt: Date.now() };
+      setEntries((prev) => prev.map((x) => (x.id === updated.id ? updated : x)).sort((a, b) => b.date.localeCompare(a.date)));
       setEditing(null);
       setAmountStr("");
       setComment("");
-      try {
-        await upsertRemote(updated);
-      } catch (e: any) {
-        setCollabStatus("error");
-        setCollabError(e?.message || "Error guardando en Supabase");
-      }
+      try { await upsertRemote(updated); } catch (e: any) { setCollabStatus("error"); setCollabError(e?.message || "Error guardando en Supabase"); }
       return;
     }
 
     const now = Date.now();
-    const newEntry: Entry = {
-      id: uid(),
-      category,
-      currency,
-      amount,
-      date,
-      comment,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const newEntry: Entry = { id: uid(), category, currency, amount, date, comment, createdAt: now, updatedAt: now };
     setEntries((prev) => [newEntry, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
     setAmountStr("");
     setComment("");
 
-    try {
-      await upsertRemote(newEntry);
-    } catch (e: any) {
-      setCollabStatus("error");
-      setCollabError(e?.message || "Error guardando en Supabase");
-    }
+    try { await upsertRemote(newEntry); } catch (e: any) { setCollabStatus("error"); setCollabError(e?.message || "Error guardando en Supabase"); }
   }
 
   function startEdit(e: Entry) {
@@ -948,12 +891,7 @@ export default function FinanzasHogarApp() {
 
   async function removeEntry(e: Entry) {
     setEntries((prev) => prev.filter((x) => x.id !== e.id));
-    try {
-      await deleteRemote(e.id);
-    } catch (err: any) {
-      setCollabStatus("error");
-      setCollabError(err?.message || "Error borrando en Supabase");
-    }
+    try { await deleteRemote(e.id); } catch (err: any) { setCollabStatus("error"); setCollabError(err?.message || "Error borrando en Supabase"); }
   }
 
   async function setBudget(monthKey: string, cat: Category, limitARS: number) {
@@ -962,38 +900,22 @@ export default function FinanzasHogarApp() {
 
     if (!Number.isFinite(limitARS) || limitARS <= 0) {
       setBudgets((prev) => prev.filter((b) => b.id !== id));
-      try {
-        await deleteBudgetRemote(id);
-      } catch (e: any) {
-        setCollabStatus("error");
-        setCollabError(e?.message || "Error borrando presupuesto en Supabase");
-      }
+      try { await deleteBudgetRemote(id); } catch (e: any) { setCollabStatus("error"); setCollabError(e?.message || "Error borrando presupuesto en Supabase"); }
       return;
     }
 
     const next: Budget = { id, monthKey, category: cat, limitARS, updatedAt: now };
     setBudgets((prev) => {
       const idx = prev.findIndex((b) => b.id === id);
-      if (idx >= 0) {
-        const copy = prev.slice();
-        copy[idx] = next;
-        return copy;
-      }
+      if (idx >= 0) { const copy = prev.slice(); copy[idx] = next; return copy; }
       return [...prev, next];
     });
 
-    try {
-      await upsertBudgetRemote(next);
-    } catch (e: any) {
-      setCollabStatus("error");
-      setCollabError(e?.message || "Error guardando presupuesto en Supabase");
-    }
+    try { await upsertBudgetRemote(next); } catch (e: any) { setCollabStatus("error"); setCollabError(e?.message || "Error guardando presupuesto en Supabase"); }
   }
 
   function exportJSON() {
-    const blob = new Blob([JSON.stringify({ entries, budgets }, null, 2)], {
-      type: "application/json",
-    });
+    const blob = new Blob([JSON.stringify({ entries, budgets }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1032,9 +954,7 @@ export default function FinanzasHogarApp() {
           }
           return Array.from(map.values());
         });
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
     reader.readAsText(file);
   }
@@ -1050,19 +970,12 @@ export default function FinanzasHogarApp() {
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return scopedEntries;
-    return scopedEntries.filter((e) => {
-      return (
-        e.category.toLowerCase().includes(q) ||
-        e.date.toLowerCase().includes(q) ||
-        (e.comment || "").toLowerCase().includes(q)
-      );
-    });
+    return scopedEntries.filter((e) => e.category.toLowerCase().includes(q) || e.date.toLowerCase().includes(q) || (e.comment || "").toLowerCase().includes(q));
   }, [scopedEntries, search]);
 
   const pivotARS = useMemo(() => {
     const out: Record<string, Record<string, number>> = {};
     for (const c of ALL_CATEGORIES) out[c] = {};
-
     for (const e of entries) {
       if (e.currency !== "ARS") continue;
       const mk = toMonthKey(e.date);
@@ -1098,9 +1011,7 @@ export default function FinanzasHogarApp() {
 
   const usdBalanceByMonth = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const m of MONTHS_2026) {
-      out[m] = (usdSavingsByMonth[m] || 0) - (usdExpensesByMonth[m] || 0);
-    }
+    for (const m of MONTHS_2026) out[m] = (usdSavingsByMonth[m] || 0) - (usdExpensesByMonth[m] || 0);
     return out;
   }, [MONTHS_2026, usdSavingsByMonth, usdExpensesByMonth]);
 
@@ -1116,7 +1027,6 @@ export default function FinanzasHogarApp() {
         if (e.category === SAVINGS_CATEGORY) ahorroUSD += e.amount;
       } else {
         if (isExpense(e.category)) {
-          // ARS expenses, excluye la categoría USD
           if (e.category !== USD_CATEGORY) gastos += e.amount;
         } else {
           ingresos += e.amount;
@@ -1124,14 +1034,7 @@ export default function FinanzasHogarApp() {
       }
     }
 
-    return {
-      ingresos,
-      gastos,
-      balance: ingresos - gastos,
-      gastosUSD,
-      ahorroUSD,
-      balanceUSD: ahorroUSD - gastosUSD,
-    };
+    return { ingresos, gastos, balance: ingresos - gastos, gastosUSD, ahorroUSD, balanceUSD: ahorroUSD - gastosUSD };
   }, [scopedEntries]);
 
   const totalsByMonthARS = useMemo(() => {
@@ -1139,12 +1042,7 @@ export default function FinanzasHogarApp() {
       const ingresos = (pivotARS["Ingresos Javi"]?.[m] || 0) + (pivotARS["Ingresos Miki"]?.[m] || 0);
       let gastos = 0;
       for (const c of ARS_EXPENSE_CATEGORIES) gastos += pivotARS[c]?.[m] || 0;
-      return {
-        month: monthLabel(m),
-        ingresos,
-        gastos,
-        balance: ingresos - gastos,
-      };
+      return { month: monthLabel(m), ingresos, gastos, balance: ingresos - gastos };
     });
   }, [MONTHS_2026, pivotARS]);
 
@@ -1152,14 +1050,12 @@ export default function FinanzasHogarApp() {
     const mk = monthKeyFromFilter;
     const totals: Array<{ category: string; total: number }> = [];
     for (const c of ARS_EXPENSE_CATEGORIES) {
-      const total = mk
-        ? (pivotARS[c]?.[mk] || 0)
-        : MONTHS_2026.reduce((acc, m) => acc + (pivotARS[c]?.[m] || 0), 0);
+      const total = mk ? (pivotARS[c]?.[mk] || 0) : MONTHS_2026.reduce((acc, m) => acc + (pivotARS[c]?.[m] || 0), 0);
       totals.push({ category: c, total });
     }
     totals.sort((a, b) => b.total - a.total);
     return totals.slice(0, 10);
-  }, [ARS_EXPENSE_CATEGORIES, MONTHS_2026, pivotARS, monthKeyFromFilter]);
+  }, [MONTHS_2026, pivotARS, monthKeyFromFilter]);
 
   const smartComparison = useMemo(() => {
     if (!monthKeyFromFilter) return null;
@@ -1176,36 +1072,17 @@ export default function FinanzasHogarApp() {
       rows.push({ category: c, cur: curV, prv: prvV, delta, pct });
     }
 
-    const increases = rows
-      .filter((r) => r.delta > 0)
-      .sort((a, b) => b.delta - a.delta)
-      .slice(0, 5);
-
-    const decreases = rows
-      .filter((r) => r.delta < 0)
-      .sort((a, b) => a.delta - b.delta)
-      .slice(0, 5);
+    const increases = rows.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 5);
+    const decreases = rows.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 5);
 
     const usd = {
-      gastos: {
-        cur: usdExpensesByMonth[cur] || 0,
-        prv: usdExpensesByMonth[prev] || 0,
-        delta: (usdExpensesByMonth[cur] || 0) - (usdExpensesByMonth[prev] || 0),
-      },
-      ahorro: {
-        cur: usdSavingsByMonth[cur] || 0,
-        prv: usdSavingsByMonth[prev] || 0,
-        delta: (usdSavingsByMonth[cur] || 0) - (usdSavingsByMonth[prev] || 0),
-      },
-      balance: {
-        cur: usdBalanceByMonth[cur] || 0,
-        prv: usdBalanceByMonth[prev] || 0,
-        delta: (usdBalanceByMonth[cur] || 0) - (usdBalanceByMonth[prev] || 0),
-      },
+      gastos: { cur: usdExpensesByMonth[cur] || 0, prv: usdExpensesByMonth[prev] || 0, delta: (usdExpensesByMonth[cur] || 0) - (usdExpensesByMonth[prev] || 0) },
+      ahorro: { cur: usdSavingsByMonth[cur] || 0, prv: usdSavingsByMonth[prev] || 0, delta: (usdSavingsByMonth[cur] || 0) - (usdSavingsByMonth[prev] || 0) },
+      balance: { cur: usdBalanceByMonth[cur] || 0, prv: usdBalanceByMonth[prev] || 0, delta: (usdBalanceByMonth[cur] || 0) - (usdBalanceByMonth[prev] || 0) },
     };
 
     return { prev, increases, decreases, usd };
-  }, [monthKeyFromFilter, pivotARS, ARS_EXPENSE_CATEGORIES, usdExpensesByMonth, usdSavingsByMonth, usdBalanceByMonth]);
+  }, [monthKeyFromFilter, pivotARS, usdExpensesByMonth, usdSavingsByMonth, usdBalanceByMonth, MONTHS_2026]);
 
   const financialHealth = useMemo(() => {
     const mode = monthKeyFromFilter ? "month" : "year";
@@ -1217,13 +1094,11 @@ export default function FinanzasHogarApp() {
     const balanceUSD = totalsCurrentFilter.balanceUSD;
 
     const savingsRate = ingresosARS > 0 ? Math.max(0, balanceARS / ingresosARS) : 0;
-
     const alerts: Array<{ tone: "info" | "warn" | "bad"; text: string }> = [];
 
     if (ingresosARS > 0 && balanceARS < 0) alerts.push({ tone: "bad", text: "Están gastando más ARS de lo que ingresa este período." });
     if (ingresosARS > 0 && savingsRate < 0.1) alerts.push({ tone: "warn", text: "Tasa de ahorro ARS baja (<10%)." });
     if (monthKeyFromFilter) {
-      // alertas por presupuestos
       for (const c of ARS_EXPENSE_CATEGORIES) {
         const b = getBudget(monthKeyFromFilter, c);
         if (!b || !b.limitARS) continue;
@@ -1232,143 +1107,85 @@ export default function FinanzasHogarApp() {
       }
     }
 
-    // score simple
     let score = 60;
     if (ingresosARS > 0) score += Math.round(savingsRate * 30);
     if (balanceARS < 0) score -= 20;
     if (alerts.some((a) => a.tone === "bad")) score -= 10;
     score = Math.max(0, Math.min(100, score));
-
     const status = score >= 75 ? "ok" : score >= 55 ? "warn" : "bad";
 
-    return {
-      mode,
-      status,
-      score,
-      ingresosARS,
-      gastosARS,
-      balanceARS,
-      savingsRate,
-      gastosUSD,
-      ahorroUSD,
-      balanceUSD,
-      alerts,
-    };
-  }, [monthKeyFromFilter, totalsCurrentFilter, ARS_EXPENSE_CATEGORIES, pivotARS, getBudget]);
+    return { mode, status, score, ingresosARS, gastosARS, balanceARS, savingsRate, gastosUSD, ahorroUSD, balanceUSD, alerts };
+  }, [monthKeyFromFilter, totalsCurrentFilter, pivotARS, budgetsById]);
 
   // ------------------ UI ------------------
 
   const isUSDSelected = category === USD_CATEGORY || category === SAVINGS_CATEGORY;
 
   return (
-    <div className="min-h-screen w-full text-foreground bg-gradient-to-b from-sky-50 via-background to-emerald-50 dark:from-slate-950 dark:via-background dark:to-slate-900">
-      <div className="mx-auto max-w-6xl p-4 md:p-8 relative">
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute -top-24 -left-24 h-64 w-64 rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-500/10" />
-          <div className="absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-emerald-200/40 blur-3xl dark:bg-emerald-500/10" />
-        </div>
-
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+    <div style={{ minHeight: "100vh", padding: 16, background: "linear-gradient(180deg, #eef6ff 0%, #f7fbff 50%, #ecfdf5 100%)" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Finanzas del Hogar</h1>
-            <p className="text-sm text-muted-foreground">
-              2026 · Cargá gastos, ingresos y ahorro en ARS, y USD por separado como una economía distinta.
-            </p>
+            <h1 style={{ margin: 0 }}>Finanzas del Hogar</h1>
+            <div style={{ marginTop: 4, color: "rgba(0,0,0,0.62)", fontSize: 13 }}>
+              2026 · ARS y USD separados (Ahorro siempre USD).
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={collabStatus === "online" ? "default" : "secondary"} className="rounded-full">
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Badge variant={collab.enabled ? (collabStatus === "online" ? "default" : "secondary") : "outline"}>
               {collab.enabled ? (collabStatus === "online" ? "Colaborativo online" : collabStatus) : "Modo local"}
             </Badge>
+
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 rounded-2xl bg-white/50 dark:bg-white/5">
+                <Button variant="outline">
                   <RefreshCcw className="h-4 w-4" /> Colaboración
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Edición colaborativa (opcional)</DialogTitle>
                   <DialogDescription>
-                    Por defecto la app guarda en tu navegador (localStorage). Si querés que se sincronice entre dos o más
-                    dispositivos en tiempo real, activá Supabase.
+                    Modo local guarda en tu navegador. Con Supabase sincroniza entre dispositivos.
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between rounded-xl border p-3">
-                      <div>
-                        <div className="font-medium">Activar Supabase</div>
-                        <div className="text-xs text-muted-foreground">Sincronización y realtime</div>
-                      </div>
-                      <Switch
-                        checked={collab.enabled}
-                        onCheckedChange={(v) => setCollab((c) => ({ ...c, enabled: Boolean(v) }))}
-                      />
+                <div style={{ padding: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", border: "1px solid rgba(0,0,0,0.12)", borderRadius: 12, padding: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>Activar Supabase</div>
+                      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>Sincronización realtime</div>
                     </div>
+                    <Switch checked={collab.enabled} onCheckedChange={(v) => setCollab((c) => ({ ...c, enabled: Boolean(v) }))} />
+                  </div>
 
-                    <div className="space-y-2">
-                      <Label>Room (nombre de familia)</Label>
-                      <Input
-                        value={collab.room}
-                        onChange={(e) => setCollab((c) => ({ ...c, room: e.target.value.trim() || "familia" }))}
-                        placeholder="ej: rodriguez"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Usen el mismo room en todos los dispositivos para ver los mismos datos.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Supabase URL</Label>
-                      <Input
-                        value={collab.supabaseUrl}
-                        onChange={(e) => setCollab((c) => ({ ...c, supabaseUrl: e.target.value }))}
-                        placeholder="https://xxxx.supabase.co"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Supabase Anon Key</Label>
-                      <Input
-                        value={collab.supabaseAnonKey}
-                        onChange={(e) => setCollab((c) => ({ ...c, supabaseAnonKey: e.target.value }))}
-                        placeholder="eyJhbGciOi..."
-                      />
+                  <div style={{ marginTop: 12 }}>
+                    <Label>Room (nombre de familia)</Label>
+                    <Input value={collab.room} onChange={(e) => setCollab((c) => ({ ...c, room: e.target.value.trim() || "familia" }))} />
+                    <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)", marginTop: 6 }}>
+                      Usen el mismo room en todos los dispositivos.
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <Alert>
-                      <AlertTitle>Checklist rápido</AlertTitle>
-                      <AlertDescription>
-                        <ol className="list-decimal ml-5 space-y-1 text-sm">
-                          <li>Crear un proyecto en Supabase</li>
-                          <li>
-                            Crear tablas <span className="font-mono">finance_entries</span> y{" "}
-                            <span className="font-mono">finance_budgets</span> (DDL abajo)
-                          </li>
-                          <li>Activar Realtime para ambas tablas</li>
-                          <li>Pegar URL + Anon Key</li>
-                        </ol>
-                      </AlertDescription>
-                    </Alert>
+                  <div style={{ marginTop: 12 }}>
+                    <Label>Supabase URL</Label>
+                    <Input value={collab.supabaseUrl} onChange={(e) => setCollab((c) => ({ ...c, supabaseUrl: e.target.value }))} placeholder="https://xxxx.supabase.co" />
+                  </div>
 
-                    {collabStatus === "error" && (
+                  <div style={{ marginTop: 12 }}>
+                    <Label>Supabase Anon Key</Label>
+                    <Input value={collab.supabaseAnonKey} onChange={(e) => setCollab((c) => ({ ...c, supabaseAnonKey: e.target.value }))} placeholder="eyJhbGciOi..." />
+                  </div>
+
+                  {collabStatus === "error" && (
+                    <div style={{ marginTop: 12 }}>
                       <Alert>
                         <AlertTitle>Error</AlertTitle>
                         <AlertDescription>{collabError || "Revisá credenciales y Realtime"}</AlertDescription>
                       </Alert>
-                    )}
-
-                    <div className="rounded-xl border p-3">
-                      <div className="text-sm font-medium">Privacidad</div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Para producción, lo ideal es habilitar RLS + autenticación. Para uso familiar simple, podés mantenerlo
-                        privado y agregar RLS más adelante.
-                      </p>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <DialogFooter>
@@ -1381,732 +1198,382 @@ export default function FinanzasHogarApp() {
           </div>
         </div>
 
-        <Separator className="my-6" />
+        <Separator />
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <TabsList className="rounded-2xl bg-white/60 dark:bg-white/5 backdrop-blur border shadow-sm">
+        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <TabsList>
               <TabsTrigger value="carga">Carga</TabsTrigger>
               <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             </TabsList>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground">Mes</Label>
-                <Select value={monthFilter || "all"} onValueChange={(v) => setMonthFilter(v === "all" ? "" : v)}>
-                  <SelectTrigger className="w-[180px] rounded-2xl bg-white/50 dark:bg-white/5">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {MONTH_OPTIONS.filter((o) => o.value).map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Label>Mes</Label>
+              <Select value={monthFilter || "all"} onValueChange={(v: any) => setMonthFilter(v === "all" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {MONTH_OPTIONS.filter((o) => o.value).map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="rounded-2xl bg-white/50 dark:bg-white/5">
-                    Presupuestos
-                  </Button>
+                  <Button variant="outline">Presupuestos</Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-3xl">
+                <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Presupuestos por categoría (ARS)</DialogTitle>
-                    <DialogDescription>
-                      Definí un tope mensual por categoría en ARS. USD queda fuera porque es otra economía.
-                    </DialogDescription>
+                    <DialogDescription>Elegí un mes para setear topes. USD queda fuera.</DialogDescription>
                   </DialogHeader>
 
-                  {!monthKeyFromFilter ? (
-                    <Alert>
-                      <AlertTitle>Elegí un mes</AlertTitle>
-                      <AlertDescription>
-                        Para definir presupuestos, seleccioná un mes específico (Enero..Diciembre).
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <div className="space-y-3 max-h-[60vh] overflow-auto pr-1">
-                      {ARS_EXPENSE_CATEGORIES.map((c) => {
-                        const spent = pivotARS[c]?.[monthKeyFromFilter] || 0;
-                        const b = getBudget(monthKeyFromFilter, c);
-                        const limit = b?.limitARS || 0;
-                        const pctLabel = limit > 0 ? Math.round((spent / limit) * 100) : 0;
-                        const pct = limit > 0 ? spent / limit : 0;
-                        return (
-                          <div key={c} className="rounded-2xl border p-3 bg-white/40 dark:bg-white/5">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                              <div className="min-w-[190px]">
-                                <div className="font-medium">{c}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  Gastado: <span className="font-medium">{formatMoneyARS(spent)}</span>
-                                  {limit > 0 ? (
-                                    <>
-                                      {" "}· Presupuesto: <span className="font-medium">{formatMoneyARS(limit)}</span>
-                                    </>
-                                  ) : null}
+                  <div style={ui.modalBody}>
+                    {!monthKeyFromFilter ? (
+                      <Alert>
+                        <AlertTitle>Elegí un mes</AlertTitle>
+                        <AlertDescription>Seleccioná un mes específico arriba.</AlertDescription>
+                      </Alert>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {ARS_EXPENSE_CATEGORIES.map((c) => {
+                          const spent = pivotARS[c]?.[monthKeyFromFilter] || 0;
+                          const b = getBudget(monthKeyFromFilter, c);
+                          const limit = b?.limitARS || 0;
+                          const pct = limit > 0 ? spent / limit : 0;
+                          return (
+                            <div key={c} style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                                <div style={{ minWidth: 220 }}>
+                                  <div style={{ fontWeight: 700 }}>{c}</div>
+                                  <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                                    Gastado: <b>{formatMoneyARS(spent)}</b>{" "}
+                                    {limit > 0 ? <>· Presupuesto: <b>{formatMoneyARS(limit)}</b></> : null}
+                                  </div>
                                 </div>
-                              </div>
-
-                              <div className="flex-1">
-                                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                                  {limit > 0 ? (
-                                    <div
-                                      className={`h-2 ${progressColorClass(pct)} rounded-full`}
-                                      style={{ width: `${Math.min(pct * 100, 100)}%` }}
-                                    />
-                                  ) : (
-                                    <div className="h-2 bg-transparent" />
-                                  )}
+                                <div style={{ flex: 1, minWidth: 200 }}>
+                                  <div style={{ height: 8, borderRadius: 999, background: "rgba(0,0,0,0.08)", overflow: "hidden" }}>
+                                    <div style={{ height: 8, width: `${Math.min(pct * 100, 100)}%`, background: pct >= 1 ? "#e11d48" : pct >= 0.8 ? "#f59e0b" : "#10b981" }} />
+                                  </div>
+                                  <div style={{ marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                                    {limit > 0 ? `${Math.round(pct * 100)}% usado` : "Sin presupuesto"}
+                                  </div>
                                 </div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {limit > 0 ? `${pctLabel}% usado` : "Sin presupuesto"}
+                                <div style={{ minWidth: 220 }}>
+                                  <Label>Presupuesto ARS</Label>
+                                  <Input
+                                    defaultValue={limit ? String(limit) : ""}
+                                    placeholder="Ej: 250000"
+                                    onBlur={(e) => setBudget(monthKeyFromFilter, c, safeNumber(e.target.value))}
+                                  />
                                 </div>
-                              </div>
-
-                              <div className="space-y-1">
-                                <Label className="text-xs">Presupuesto ARS</Label>
-                                <Input
-                                  className="w-[180px] rounded-2xl"
-                                  inputMode="decimal"
-                                  defaultValue={limit ? String(limit) : ""}
-                                  placeholder="Ej: 250000"
-                                  onBlur={(e) => setBudget(monthKeyFromFilter, c, safeNumber(e.target.value))}
-                                />
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
 
                   <DialogFooter>
-                    <Button variant="outline" className="rounded-2xl">Cerrar</Button>
+                    <Button variant="outline">Cerrar</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
           </div>
 
+          {/* ------------------ TAB CARGA ------------------ */}
           <TabsContent value="carga" className="mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="lg:col-span-1 rounded-3xl border-white/40 bg-white/60 dark:bg-white/5 backdrop-blur shadow-sm">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+              <Card>
                 <CardHeader>
                   <CardTitle>{editing ? "Editar movimiento" : "Agregar movimiento"}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Categoría</Label>
-                    <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
-                      <SelectTrigger className="rounded-2xl">
-                        <SelectValue placeholder="Elegí una categoría" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="px-2 py-1 text-xs text-muted-foreground">Gastos</div>
-                        {CATEGORIES_EXPENSE.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                        <div className="px-2 py-1 text-xs text-muted-foreground">Positivos</div>
-                        {CATEGORIES_POSITIVE.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <CardContent>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+                    <div>
+                      <Label>Categoría</Label>
+                      <Select value={category} onValueChange={(v: any) => setCategory(v as Category)}>
+                        <SelectTrigger><SelectValue placeholder="Elegí una categoría" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="" disabled>—</SelectItem>
+                          {CATEGORIES_EXPENSE.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                          {CATEGORIES_POSITIVE.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                      <span>
-                        {isExpense(category)
-                          ? "Se contabiliza como gasto"
-                          : "Se contabiliza como ingreso/ahorro"}
-                      </span>
-                      {isUSDSelected && <Badge variant="outline" className="rounded-full">USD</Badge>}
-                      {!isUSDSelected && isExpense(category) && <Badge variant="outline" className="rounded-full">ARS</Badge>}
-                      {!isExpense(category) && !isUSDSelected && <Badge variant="outline" className="rounded-full">ARS</Badge>}
+                      <div style={{ marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.62)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <span>{isExpense(category) ? "Se contabiliza como gasto" : "Se contabiliza como ingreso/ahorro"}</span>
+                        {isUSDSelected ? <Badge variant="outline">USD</Badge> : <Badge variant="outline">ARS</Badge>}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label>{isUSDSelected ? "Monto (USD)" : "Importe (ARS)"}</Label>
-                    <Input
-                      value={amountStr}
-                      onChange={(e) => setAmountStr(e.target.value)}
-                      inputMode="decimal"
-                      placeholder={isUSDSelected ? "Ej: 35" : "Ej: 125000"}
-                      className="rounded-2xl"
-                    />
-                    <div className="text-xs text-muted-foreground">
-                      Vista:{" "}
-                      <span className="font-medium">
-                        {amountStr
-                          ? isUSDSelected
-                            ? formatMoneyUSD(safeNumber(amountStr))
-                            : formatMoneyARS(safeNumber(amountStr))
-                          : "—"}
-                      </span>
+                    <div>
+                      <Label>{isUSDSelected ? "Monto (USD)" : "Importe (ARS)"}</Label>
+                      <Input value={amountStr} onChange={(e) => setAmountStr(e.target.value)} inputMode="decimal" placeholder={isUSDSelected ? "Ej: 35" : "Ej: 125000"} />
+                      <div style={{ marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                        Vista: <b>{amountStr ? (isUSDSelected ? formatMoneyUSD(safeNumber(amountStr)) : formatMoneyARS(safeNumber(amountStr))) : "—"}</b>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label>Fecha</Label>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-2xl" />
-                    <div className="text-xs text-muted-foreground">Tip: para que se vea en el dashboard, usá fechas 2026.</div>
-                  </div>
+                    <div>
+                      <Label>Fecha</Label>
+                      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                      <div style={{ marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                        Tip: para dashboard 2026, usá fechas 2026.
+                      </div>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label>Comentario (opcional)</Label>
-                    <Textarea
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="Ej: supermercado + farmacia"
-                      className="rounded-2xl"
-                    />
-                  </div>
+                    <div>
+                      <Label>Comentario (opcional)</Label>
+                      <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Ej: supermercado + farmacia" />
+                    </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1 rounded-2xl"
-                      onClick={handleSubmit}
-                      disabled={!category || !date || safeNumber(amountStr) <= 0}
-                    >
-                      {editing ? "Guardar cambios" : "Agregar"}
-                    </Button>
-                    {editing && (
+                    <div style={{ display: "flex", gap: 10 }}>
                       <Button
-                        variant="outline"
-                        className="rounded-2xl"
+                        variant="primary"
+                        onClick={handleSubmit}
+                        disabled={!category || !date || safeNumber(amountStr) <= 0}
+                        style={{ flex: 1 }}
+                      >
+                        {editing ? "Guardar cambios" : "Agregar"}
+                      </Button>
+                      {editing && (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setEditing(null);
+                            setAmountStr("");
+                            setComment("");
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <Button variant="outline" onClick={exportJSON}>
+                        <Download className="h-4 w-4" /> Exportar
+                      </Button>
+
+                      <label>
+                        <input
+                          type="file"
+                          accept="application/json"
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) importJSON(f);
+                            (e.currentTarget as any).value = "";
+                          }}
+                        />
+                        <Button variant="outline" type="button">
+                          <Upload className="h-4 w-4" /> Importar
+                        </Button>
+                      </label>
+
+                      <Button
+                        variant="destructive"
                         onClick={() => {
-                          setEditing(null);
-                          setAmountStr("");
-                          setComment("");
+                          setEntries([]);
+                          setBudgets([]);
+                          localStorage.removeItem(APP_KEY);
                         }}
                       >
-                        Cancelar
+                        <Trash2 className="h-4 w-4" /> Borrar todo
                       </Button>
-                    )}
-                  </div>
+                    </div>
 
-                  <Separator />
+                    <Separator />
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" className="gap-2 rounded-2xl" onClick={exportJSON}>
-                      <Download className="h-4 w-4" /> Exportar
-                    </Button>
-                    <label className="inline-flex">
-                      <input
-                        type="file"
-                        accept="application/json"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) importJSON(f);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                      <Button variant="outline" className="gap-2 rounded-2xl" type="button">
-                        <Upload className="h-4 w-4" /> Importar
-                      </Button>
-                    </label>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="destructive" className="gap-2 rounded-2xl">
-                          <Trash2 className="h-4 w-4" /> Borrar todo
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>¿Borrar todo?</DialogTitle>
-                          <DialogDescription>
-                            Esto elimina los datos locales del navegador. Si tenés Supabase activado, no borra remoto.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <Button variant="outline">Cancelar</Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => {
-                              setEntries([]);
-                              setBudgets([]);
-                              localStorage.removeItem(APP_KEY);
-                            }}
-                          >
-                            Borrar
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </CardContent>
-              </Card>
+                    <div>
+                      <Label>Buscar</Label>
+                      <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="categoría, fecha, comentario" />
+                    </div>
 
-              <Card className="lg:col-span-2 rounded-3xl border-white/40 bg-white/60 dark:bg-white/5 backdrop-blur shadow-sm">
-                <CardHeader>
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <CardTitle>Movimientos</CardTitle>
-                    <Input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Buscar (categoría, fecha, comentario)"
-                      className="w-full md:w-[340px] rounded-2xl"
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-                    <SummaryKPI title="Ingresos (ARS)" value={formatMoneyARS(totalsCurrentFilter.ingresos)} />
-                    <SummaryKPI title="Gastos (ARS)" value={formatMoneyARS(totalsCurrentFilter.gastos)} />
-                    <SummaryKPI
-                      title="Balance (ARS)"
-                      value={formatMoneyARS(totalsCurrentFilter.balance)}
-                      emphasis={totalsCurrentFilter.balance >= 0}
-                    />
-                    <SummaryKPI title="Gastos (USD)" value={formatMoneyUSD(totalsCurrentFilter.gastosUSD)} />
-                    <SummaryKPI title="Ahorro (USD)" value={formatMoneyUSD(totalsCurrentFilter.ahorroUSD)} />
-                    <SummaryKPI
-                      title="Balance (USD)"
-                      value={formatMoneyUSD(totalsCurrentFilter.balanceUSD)}
-                      emphasis={totalsCurrentFilter.balanceUSD >= 0}
-                    />
-                  </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0,1fr))", gap: 10 }}>
+                      <SummaryKPI title="Ingresos (ARS)" value={formatMoneyARS(totalsCurrentFilter.ingresos)} />
+                      <SummaryKPI title="Gastos (ARS)" value={formatMoneyARS(totalsCurrentFilter.gastos)} />
+                      <SummaryKPI title="Balance (ARS)" value={formatMoneyARS(totalsCurrentFilter.balance)} emphasis={totalsCurrentFilter.balance >= 0} />
+                      <SummaryKPI title="Gastos (USD)" value={formatMoneyUSD(totalsCurrentFilter.gastosUSD)} />
+                      <SummaryKPI title="Ahorro (USD)" value={formatMoneyUSD(totalsCurrentFilter.ahorroUSD)} />
+                      <SummaryKPI title="Balance (USD)" value={formatMoneyUSD(totalsCurrentFilter.balanceUSD)} emphasis={totalsCurrentFilter.balanceUSD >= 0} />
+                    </div>
 
-                  <div className="rounded-3xl border border-white/40 bg-white/40 dark:bg-white/5 overflow-hidden shadow-sm">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-white/30 dark:bg-white/5">
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Categoría</TableHead>
-                          <TableHead className="text-right">Importe</TableHead>
-                          <TableHead>Comentario</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredEntries.length === 0 ? (
+                    <div style={ui.tableWrap}>
+                      <Table>
+                        <TableHeader>
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-10">
-                              Sin movimientos todavía.
-                            </TableCell>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead>Categoría</TableHead>
+                            <TableHead style={{ textAlign: "right" }}>Importe</TableHead>
+                            <TableHead>Comentario</TableHead>
+                            <TableHead style={{ textAlign: "right" }}>Acciones</TableHead>
                           </TableRow>
-                        ) : (
-                          filteredEntries.slice(0, 200).map((e) => (
-                            <TableRow key={e.id} className="transition-colors hover:bg-white/30 dark:hover:bg-white/5">
-                              <TableCell className="whitespace-nowrap">{e.date}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <span>{e.category}</span>
-                                  {isExpense(e.category) ? <Badge variant="secondary">Gasto</Badge> : <Badge>+</Badge>}
-                                  <Badge variant="outline" className="rounded-full">{e.currency}</Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {e.currency === "USD" ? formatMoneyUSD(e.amount) : formatMoneyARS(e.amount)}
-                              </TableCell>
-                              <TableCell className="max-w-[340px] truncate" title={e.comment || ""}>{e.comment || "—"}</TableCell>
-                              <TableCell className="text-right">
-                                <div className="inline-flex gap-2">
-                                  <Button variant="outline" size="icon" onClick={() => startEdit(e)}>
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button variant="destructive" size="icon">
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                      <DialogHeader>
-                                        <DialogTitle>Eliminar movimiento</DialogTitle>
-                                        <DialogDescription>
-                                          {e.date} · {e.category} · {e.currency === "USD" ? formatMoneyUSD(e.amount) : formatMoneyARS(e.amount)}
-                                        </DialogDescription>
-                                      </DialogHeader>
-                                      <DialogFooter>
-                                        <Button variant="outline">Cancelar</Button>
-                                        <Button variant="destructive" onClick={() => removeEntry(e)}>
-                                          Eliminar
-                                        </Button>
-                                      </DialogFooter>
-                                    </DialogContent>
-                                  </Dialog>
-                                </div>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredEntries.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} style={{ textAlign: "center", padding: 24, color: "rgba(0,0,0,0.55)" }}>
+                                Sin movimientos todavía.
                               </TableCell>
                             </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                          ) : (
+                            filteredEntries.slice(0, 200).map((e) => (
+                              <TableRow key={e.id}>
+                                <TableCell>{e.date}</TableCell>
+                                <TableCell>
+                                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                    <span>{e.category}</span>
+                                    {isExpense(e.category) ? <Badge variant="secondary">Gasto</Badge> : <Badge variant="default">+</Badge>}
+                                    <Badge variant="outline">{e.currency}</Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell style={{ textAlign: "right" }}>
+                                  {e.currency === "USD" ? formatMoneyUSD(e.amount) : formatMoneyARS(e.amount)}
+                                </TableCell>
+                                <TableCell title={e.comment || ""} style={{ maxWidth: 360, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {e.comment || "—"}
+                                </TableCell>
+                                <TableCell style={{ textAlign: "right" }}>
+                                  <div style={{ display: "inline-flex", gap: 8 }}>
+                                    <Button variant="outline" size="icon" onClick={() => startEdit(e)}>
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="destructive" size="icon" onClick={() => removeEntry(e)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
 
-                  {filteredEntries.length > 200 && (
-                    <p className="text-xs text-muted-foreground mt-2">Mostrando 200 de {filteredEntries.length} resultados.</p>
-                  )}
+                    {filteredEntries.length > 200 && (
+                      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                        Mostrando 200 de {filteredEntries.length}.
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
+          {/* ------------------ TAB DASHBOARD ------------------ */}
           <TabsContent value="dashboard" className="mt-4">
-            <Card className="rounded-3xl border-white/40 bg-white/60 dark:bg-white/5 backdrop-blur shadow-sm">
-              <CardHeader>
-                <CardTitle>Dashboard</CardTitle>
-              </CardHeader>
+            <Card>
+              <CardHeader><CardTitle>Dashboard</CardTitle></CardHeader>
               <CardContent>
-                <div className="rounded-3xl border border-white/40 bg-white/40 dark:bg-white/5 overflow-auto shadow-sm">
+                <div style={{ display: "grid", gap: 12 }}>
                   {monthKeyFromFilter && (
-                    <div className="p-3">
-                      <div className="text-sm font-medium">Progreso de presupuestos · {monthLabel(monthKeyFromFilter)}</div>
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {ARS_EXPENSE_CATEGORIES.map((c) => {
-                          const b = getBudget(monthKeyFromFilter, c);
-                          if (!b) return null;
-                          const spent = pivotARS[c]?.[monthKeyFromFilter] || 0;
-                          const pct = b.limitARS > 0 ? spent / b.limitARS : 0;
-                          const remaining = b.limitARS - spent;
-                          return (
-                            <div key={c} className="rounded-2xl border p-3 bg-white/30 dark:bg-white/5">
-                              <div className="flex items-center justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-medium">{c}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {formatMoneyARS(spent)} / {formatMoneyARS(b.limitARS)} · {Math.round(pct * 100)}%
-                                  </div>
-                                </div>
-                                <Badge
-                                  className="rounded-full"
-                                  variant={pct >= 1 ? "destructive" : pct >= 0.8 ? "secondary" : "default"}
-                                >
-                                  {remaining >= 0
-                                    ? `Restan ${formatMoneyARS(remaining)}`
-                                    : `Exceso ${formatMoneyARS(Math.abs(remaining))}`}
-                                </Badge>
-                              </div>
-                              <div className="mt-2 h-2 w-full rounded-full bg-muted overflow-hidden">
-                                <div
-                                  className={`h-2 ${progressColorClass(pct)} rounded-full`}
-                                  style={{ width: `${Math.min(pct * 100, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="p-3">
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div>
-                        <div className="text-sm font-medium">Salud financiera</div>
-                        <div className="text-xs text-muted-foreground">
-                          {financialHealth.mode === "month" && monthKeyFromFilter
-                            ? `Mes: ${monthLabel(monthKeyFromFilter)}`
-                            : "Vista general 2026 (acumulado)"}
-                        </div>
-                      </div>
-                      <Badge
-                        className="rounded-full"
-                        variant={
-                          financialHealth.status === "ok"
-                            ? "default"
-                            : financialHealth.status === "warn"
-                              ? "secondary"
-                              : "destructive"
-                        }
-                      >
-                        Score {financialHealth.score}/100
-                      </Badge>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="rounded-2xl border p-3 bg-white/30 dark:bg-white/5">
-                        <div className="text-xs text-muted-foreground">ARS</div>
-                        <div className="mt-1 text-sm">Ingresos: <span className="font-semibold">{formatMoneyARS(financialHealth.ingresosARS)}</span></div>
-                        <div className="text-sm">Gastos: <span className="font-semibold">{formatMoneyARS(financialHealth.gastosARS)}</span></div>
-                        <div className="text-sm">Balance: <span className="font-semibold">{formatMoneyARS(financialHealth.balanceARS)}</span></div>
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          Tasa de ahorro: {Math.round(financialHealth.savingsRate * 100)}%
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border p-3 bg-white/30 dark:bg-white/5">
-                        <div className="text-xs text-muted-foreground">USD</div>
-                        <div className="mt-1 text-sm">Ahorro: <span className="font-semibold">{formatMoneyUSD(financialHealth.ahorroUSD)}</span></div>
-                        <div className="text-sm">Gastos: <span className="font-semibold">{formatMoneyUSD(financialHealth.gastosUSD)}</span></div>
-                        <div className="text-sm">Balance: <span className="font-semibold">{formatMoneyUSD(financialHealth.balanceUSD)}</span></div>
-                        <div className="mt-2 text-xs text-muted-foreground">Balance USD = Ahorro USD − Gastos USD.</div>
-                      </div>
-
-                      <div className="rounded-2xl border p-3 bg-white/30 dark:bg-white/5">
-                        <div className="text-xs text-muted-foreground">Alertas</div>
-                        <div className="mt-2 space-y-2">
-                          {financialHealth.alerts.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">Sin alertas.</div>
-                          ) : (
-                            financialHealth.alerts.map((a, idx) => (
-                              <div key={idx} className="flex items-start gap-2">
-                                <span
-                                  className={`mt-1 inline-block h-2 w-2 rounded-full ${
-                                    a.tone === "bad" ? "bg-rose-500" : a.tone === "warn" ? "bg-amber-500" : "bg-sky-500"
-                                  }`}
-                                />
-                                <div className="text-sm leading-snug">{a.text}</div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Table>
-                    <TableHeader className="sticky top-0 z-20">
-                      <TableRow className="bg-white/40 dark:bg-white/5">
-                        <TableHead className="sticky left-0 bg-white/60 dark:bg-background/80 backdrop-blur z-10 min-w-[240px]">Categoría</TableHead>
-                        {months.map((m, idx) => (
-                          <TableHead
-                            key={m}
-                            className={`whitespace-nowrap text-right ${idx === 0 ? "" : "border-l"} bg-white/30 dark:bg-white/5`}
-                          >
-                            {monthLabel(m)}
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ALL_CATEGORIES.map((c) => (
-                        <TableRow key={c} className="transition-colors hover:bg-white/20 dark:hover:bg-white/5">
-                          <TableCell className="sticky left-0 bg-white/60 dark:bg-background/80 backdrop-blur z-10 font-medium">
-                            <div className="flex items-center gap-2">
-                              <span>{c}</span>
-                              {isExpense(c) ? <Badge variant="secondary">Gasto</Badge> : <Badge>+</Badge>}
-                              {c === USD_CATEGORY || c === SAVINGS_CATEGORY ? (
-                                <Badge variant="outline" className="rounded-full">USD</Badge>
-                              ) : (
-                                <Badge variant="outline" className="rounded-full">ARS</Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          {months.map((m, idx) => {
-                            const cell = c === USD_CATEGORY
-                              ? (usdExpensesByMonth[m] || 0)
-                              : c === SAVINGS_CATEGORY
-                                ? (usdSavingsByMonth[m] || 0)
-                                : (pivotARS[c]?.[m] || 0);
+                    <Card style={{ background: "rgba(255,255,255,0.7)" }}>
+                      <CardHeader>
+                        <CardTitle>Progreso de presupuestos · {monthLabel(monthKeyFromFilter)}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10 }}>
+                          {ARS_EXPENSE_CATEGORIES.map((c) => {
+                            const b = getBudget(monthKeyFromFilter, c);
+                            if (!b) return null;
+                            const spent = pivotARS[c]?.[monthKeyFromFilter] || 0;
+                            const pct = b.limitARS > 0 ? spent / b.limitARS : 0;
+                            const remaining = b.limitARS - spent;
                             return (
-                              <TableCell
-                                key={m}
-                                className={`text-right tabular-nums whitespace-nowrap ${idx === 0 ? "" : "border-l"} ${idx % 2 === 0 ? "bg-white/20 dark:bg-white/0" : "bg-white/10 dark:bg-white/0"}`}
-                              >
-                                {cell ? ((c === USD_CATEGORY || c === SAVINGS_CATEGORY) ? formatMoneyUSD(cell) : formatMoneyARS(cell)) : "—"}
-                              </TableCell>
+                              <div key={c} style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                                  <div>
+                                    <div style={{ fontWeight: 700 }}>{c}</div>
+                                    <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                                      {formatMoneyARS(spent)} / {formatMoneyARS(b.limitARS)} · {Math.round(pct * 100)}%
+                                    </div>
+                                  </div>
+                                  <Badge variant={pct >= 1 ? "destructive" : pct >= 0.8 ? "secondary" : "default"}>
+                                    {remaining >= 0 ? `Restan ${formatMoneyARS(remaining)}` : `Exceso ${formatMoneyARS(Math.abs(remaining))}`}
+                                  </Badge>
+                                </div>
+                                <div style={{ marginTop: 10, height: 8, borderRadius: 999, background: "rgba(0,0,0,0.08)", overflow: "hidden" }}>
+                                  <div style={{ height: 8, width: `${Math.min(pct * 100, 100)}%`, background: pct >= 1 ? "#e11d48" : pct >= 0.8 ? "#f59e0b" : "#10b981" }} />
+                                </div>
+                              </div>
                             );
                           })}
-                        </TableRow>
-                      ))}
-
-                      <TableRow>
-                        <TableCell className="sticky left-0 bg-white/60 dark:bg-background/80 backdrop-blur z-10 font-semibold">
-                          Totales (Gastos ARS)
-                        </TableCell>
-                        {months.map((m, idx) => {
-                          let total = 0;
-                          for (const c of ARS_EXPENSE_CATEGORIES) total += pivotARS[c]?.[m] || 0;
-                          return (
-                            <TableCell
-                              key={m}
-                              className={`text-right tabular-nums font-semibold whitespace-nowrap ${idx === 0 ? "" : "border-l"}`}
-                            >
-                              {total ? formatMoneyARS(total) : "—"}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-
-                      <TableRow>
-                        <TableCell className="sticky left-0 bg-white/60 dark:bg-background/80 backdrop-blur z-10 font-semibold">
-                          Totales (Ingresos ARS)
-                        </TableCell>
-                        {months.map((m, idx) => {
-                          const total = (pivotARS["Ingresos Javi"]?.[m] || 0) + (pivotARS["Ingresos Miki"]?.[m] || 0);
-                          return (
-                            <TableCell key={m} className={`text-right tabular-nums font-semibold whitespace-nowrap ${idx === 0 ? "" : "border-l"}`}>
-                              {total ? formatMoneyARS(total) : "—"}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-
-                      <TableRow>
-                        <TableCell className="sticky left-0 bg-white/60 dark:bg-background/80 backdrop-blur z-10 font-semibold">
-                          Totales (Ahorro USD)
-                        </TableCell>
-                        {months.map((m, idx) => {
-                          const total = usdSavingsByMonth[m] || 0;
-                          return (
-                            <TableCell
-                              key={m}
-                              className={`text-right tabular-nums font-semibold whitespace-nowrap ${idx === 0 ? "" : "border-l"}`}
-                            >
-                              {total ? formatMoneyUSD(total) : "—"}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-
-                      <TableRow>
-                        <TableCell className="sticky left-0 bg-white/60 dark:bg-background/80 backdrop-blur z-10 font-semibold">
-                          Totales (Gastos USD)
-                        </TableCell>
-                        {months.map((m, idx) => {
-                          const total = usdExpensesByMonth[m] || 0;
-                          return (
-                            <TableCell key={m} className={`text-right tabular-nums font-semibold whitespace-nowrap ${idx === 0 ? "" : "border-l"}`}>
-                              {total ? formatMoneyUSD(total) : "—"}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <Separator className="my-6" />
-
-                <div className="rounded-3xl border border-white/40 bg-white/40 dark:bg-white/5 p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <div className="text-sm font-medium">Comparativa inteligente</div>
-                      <div className="text-xs text-muted-foreground">
-                        {monthKeyFromFilter
-                          ? `Comparando ${monthLabel(monthKeyFromFilter)} vs ${smartComparison?.prev ? monthLabel(smartComparison.prev) : "(sin mes previo)"}`
-                          : "Seleccioná un mes para ver variaciones vs el mes anterior."}
-                      </div>
-                    </div>
-                    {!monthKeyFromFilter && (
-                      <Badge variant="secondary" className="rounded-full">
-                        Elegí un mes arriba
-                      </Badge>
-                    )}
-                  </div>
-
-                  {!monthKeyFromFilter || !smartComparison ? (
-                    <div className="mt-3">
-                      <Alert>
-                        <AlertTitle>Tip</AlertTitle>
-                        <AlertDescription>
-                          Elegí un mes (Enero..Diciembre) en el selector de arriba para ver subas/bajas por categoría y alertas.
-                        </AlertDescription>
-                      </Alert>
-                    </div>
-                  ) : (
-                    <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-                      <div className="rounded-2xl border p-3 bg-white/30 dark:bg-white/5">
-                        <div className="text-sm font-semibold">Top subas (ARS)</div>
-                        <div className="mt-2 space-y-2">
-                          {smartComparison.increases.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">Sin subas relevantes.</div>
-                          ) : (
-                            smartComparison.increases.map((r) => (
-                              <div key={r.category} className="flex items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-medium">{r.category}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {formatMoneyARS(r.prv)} → {formatMoneyARS(r.cur)}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-sm font-semibold">+{formatMoneyARS(r.delta)}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {r.pct === null ? "—" : `+${Math.round(r.pct * 100)}%`}
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
                         </div>
-                      </div>
-
-                      <div className="rounded-2xl border p-3 bg-white/30 dark:bg-white/5">
-                        <div className="text-sm font-semibold">Top bajas (ARS)</div>
-                        <div className="mt-2 space-y-2">
-                          {smartComparison.decreases.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">Sin bajas relevantes.</div>
-                          ) : (
-                            smartComparison.decreases.map((r) => (
-                              <div key={r.category} className="flex items-start justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-medium">{r.category}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {formatMoneyARS(r.prv)} → {formatMoneyARS(r.cur)}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-sm font-semibold">{formatMoneyARS(r.delta)}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {r.pct === null ? "—" : `${Math.round(r.pct * 100)}%`}
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border p-3 bg-white/30 dark:bg-white/5">
-                        <div className="text-sm font-semibold">Resumen USD</div>
-                        <div className="mt-2 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm">Gastos USD</div>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold">{formatMoneyUSD(smartComparison.usd.gastos.cur)}</div>
-                              <div className="text-xs text-muted-foreground">
-                                Δ {formatMoneyUSD(smartComparison.usd.gastos.delta)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm">Ahorro USD</div>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold">{formatMoneyUSD(smartComparison.usd.ahorro.cur)}</div>
-                              <div className="text-xs text-muted-foreground">
-                                Δ {formatMoneyUSD(smartComparison.usd.ahorro.delta)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm">Balance USD</div>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold">{formatMoneyUSD(smartComparison.usd.balance.cur)}</div>
-                              <div className="text-xs text-muted-foreground">
-                                Δ {formatMoneyUSD(smartComparison.usd.balance.delta)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Balance USD = Ahorro USD − Gastos USD.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
                   )}
-                </div>
 
-                <Separator className="my-6" />
+                  <Card style={{ background: "rgba(255,255,255,0.7)" }}>
+                    <CardHeader><CardTitle>Salud financiera</CardTitle></CardHeader>
+                    <CardContent>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                        <div style={{ fontSize: 13, color: "rgba(0,0,0,0.62)" }}>
+                          {financialHealth.mode === "month" && monthKeyFromFilter ? `Mes: ${monthLabel(monthKeyFromFilter)}` : "Vista general 2026 (acumulado)"}
+                        </div>
+                        <Badge variant={financialHealth.status === "ok" ? "default" : financialHealth.status === "warn" ? "secondary" : "destructive"}>
+                          Score {financialHealth.score}/100
+                        </Badge>
+                      </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <Card className="rounded-3xl border-white/40 bg-white/60 dark:bg-white/5 backdrop-blur shadow-sm lg:col-span-2">
-                    <CardHeader>
-                      <CardTitle className="text-base">Evolución mensual (ARS)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[320px]">
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10, marginTop: 12 }}>
+                        <div style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                          <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>ARS</div>
+                          <div style={{ marginTop: 6 }}>Ingresos: <b>{formatMoneyARS(financialHealth.ingresosARS)}</b></div>
+                          <div>Gastos: <b>{formatMoneyARS(financialHealth.gastosARS)}</b></div>
+                          <div>Balance: <b>{formatMoneyARS(financialHealth.balanceARS)}</b></div>
+                          <div style={{ marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                            Tasa de ahorro: {Math.round(financialHealth.savingsRate * 100)}%
+                          </div>
+                        </div>
+
+                        <div style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                          <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>USD</div>
+                          <div style={{ marginTop: 6 }}>Ahorro: <b>{formatMoneyUSD(financialHealth.ahorroUSD)}</b></div>
+                          <div>Gastos: <b>{formatMoneyUSD(financialHealth.gastosUSD)}</b></div>
+                          <div>Balance: <b>{formatMoneyUSD(financialHealth.balanceUSD)}</b></div>
+                          <div style={{ marginTop: 6, fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+                            Balance USD = Ahorro USD − Gastos USD
+                          </div>
+                        </div>
+
+                        <div style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                          <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>Alertas</div>
+                          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                            {financialHealth.alerts.length === 0 ? (
+                              <div style={{ fontSize: 13, color: "rgba(0,0,0,0.62)" }}>Sin alertas.</div>
+                            ) : (
+                              financialHealth.alerts.map((a, idx) => (
+                                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                  <span style={{ width: 10, height: 10, borderRadius: 999, marginTop: 4, background: a.tone === "bad" ? "#e11d48" : a.tone === "warn" ? "#f59e0b" : "#0ea5e9" }} />
+                                  <div style={{ fontSize: 13 }}>{a.text}</div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card style={{ background: "rgba(255,255,255,0.7)" }}>
+                    <CardHeader><CardTitle>Evolución mensual (ARS)</CardTitle></CardHeader>
+                    <CardContent style={{ height: 320 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={totalsByMonthARS} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -2116,17 +1583,15 @@ export default function FinanzasHogarApp() {
                           <Legend />
                           <Line type="monotone" dataKey="ingresos" name="Ingresos" strokeWidth={2} dot={false} />
                           <Line type="monotone" dataKey="gastos" name="Gastos" strokeWidth={2} dot={false} />
-                                                    <Line type="monotone" dataKey="balance" name="Balance" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="balance" name="Balance" strokeWidth={2} dot={false} />
                         </LineChart>
                       </ResponsiveContainer>
                     </CardContent>
                   </Card>
 
-                  <Card className="rounded-3xl border-white/40 bg-white/60 dark:bg-white/5 backdrop-blur shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-base">USD por mes (Gastos + Ahorro)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[320px]">
+                  <Card style={{ background: "rgba(255,255,255,0.7)" }}>
+                    <CardHeader><CardTitle>USD por mes (Gastos + Ahorro)</CardTitle></CardHeader>
+                    <CardContent style={{ height: 320 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
                           data={months.map((m) => ({
@@ -2150,11 +1615,9 @@ export default function FinanzasHogarApp() {
                     </CardContent>
                   </Card>
 
-                  <Card className="rounded-3xl border-white/40 bg-white/60 dark:bg-white/5 backdrop-blur shadow-sm lg:col-span-3">
-                    <CardHeader>
-                      <CardTitle className="text-base">Top categorías de gasto (ARS)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[320px]">
+                  <Card style={{ background: "rgba(255,255,255,0.7)" }}>
+                    <CardHeader><CardTitle>Top categorías de gasto (ARS)</CardTitle></CardHeader>
+                    <CardContent style={{ height: 320 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={topCategoriesForBarsARS} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -2166,83 +1629,149 @@ export default function FinanzasHogarApp() {
                       </ResponsiveContainer>
                     </CardContent>
                   </Card>
+
+                  <Card style={{ background: "rgba(255,255,255,0.7)" }}>
+                    <CardHeader><CardTitle>Comparativa inteligente</CardTitle></CardHeader>
+                    <CardContent>
+                      {!monthKeyFromFilter || !smartComparison ? (
+                        <Alert>
+                          <AlertTitle>Tip</AlertTitle>
+                          <AlertDescription>Elegí un mes específico para comparar contra el mes anterior.</AlertDescription>
+                        </Alert>
+                      ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
+                          <div style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                            <div style={{ fontWeight: 800 }}>Top subas (ARS)</div>
+                            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                              {smartComparison.increases.length === 0 ? (
+                                <div style={{ color: "rgba(0,0,0,0.62)" }}>Sin subas relevantes.</div>
+                              ) : (
+                                smartComparison.increases.map((r) => (
+                                  <div key={r.category} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                    <div>
+                                      <div style={{ fontWeight: 700 }}>{r.category}</div>
+                                      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>{formatMoneyARS(r.prv)} → {formatMoneyARS(r.cur)}</div>
+                                    </div>
+                                    <div style={{ textAlign: "right" }}>
+                                      <div style={{ fontWeight: 800 }}>+{formatMoneyARS(r.delta)}</div>
+                                      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>{r.pct === null ? "—" : `+${Math.round(r.pct * 100)}%`}</div>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                            <div style={{ fontWeight: 800 }}>Top bajas (ARS)</div>
+                            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                              {smartComparison.decreases.length === 0 ? (
+                                <div style={{ color: "rgba(0,0,0,0.62)" }}>Sin bajas relevantes.</div>
+                              ) : (
+                                smartComparison.decreases.map((r) => (
+                                  <div key={r.category} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                    <div>
+                                      <div style={{ fontWeight: 700 }}>{r.category}</div>
+                                      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>{formatMoneyARS(r.prv)} → {formatMoneyARS(r.cur)}</div>
+                                    </div>
+                                    <div style={{ textAlign: "right" }}>
+                                      <div style={{ fontWeight: 800 }}>{formatMoneyARS(r.delta)}</div>
+                                      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>{r.pct === null ? "—" : `${Math.round(r.pct * 100)}%`}</div>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 12, padding: 12, background: "rgba(255,255,255,0.8)" }}>
+                            <div style={{ fontWeight: 800 }}>Resumen USD</div>
+                            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span>Gastos USD</span>
+                                <b>{formatMoneyUSD(smartComparison.usd.gastos.cur)}</b>
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span>Ahorro USD</span>
+                                <b>{formatMoneyUSD(smartComparison.usd.ahorro.cur)}</b>
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span>Balance USD</span>
+                                <b>{formatMoneyUSD(smartComparison.usd.balance.cur)}</b>
+                              </div>
+                              <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>Balance USD = Ahorro − Gastos.</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card style={{ background: "rgba(255,255,255,0.7)" }}>
+                    <CardHeader><CardTitle>Tabla completa (Categorías x Meses)</CardTitle></CardHeader>
+                    <CardContent>
+                      <div style={ui.tableWrap}>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead style={{ minWidth: 220 }}>Categoría</TableHead>
+                              {months.map((m) => (
+                                <TableHead key={m} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                                  {monthLabel(m)}
+                                </TableHead>
+                              ))}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {ALL_CATEGORIES.map((c) => (
+                              <TableRow key={c}>
+                                <TableCell style={{ fontWeight: 700 }}>
+                                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                                    <span>{c}</span>
+                                    {isExpense(c) ? <Badge variant="secondary">Gasto</Badge> : <Badge variant="default">+</Badge>}
+                                    {c === USD_CATEGORY || c === SAVINGS_CATEGORY ? <Badge variant="outline">USD</Badge> : <Badge variant="outline">ARS</Badge>}
+                                  </div>
+                                </TableCell>
+                                {months.map((m) => {
+                                  const cell =
+                                    c === USD_CATEGORY ? (usdExpensesByMonth[m] || 0)
+                                    : c === SAVINGS_CATEGORY ? (usdSavingsByMonth[m] || 0)
+                                    : (pivotARS[c]?.[m] || 0);
+                                  return (
+                                    <TableCell key={m} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                                      {cell ? ((c === USD_CATEGORY || c === SAVINGS_CATEGORY) ? formatMoneyUSD(cell) : formatMoneyARS(cell)) : "—"}
+                                    </TableCell>
+                                  );
+                                })}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
 
-        <div className="mt-10 rounded-2xl border p-4 text-xs text-muted-foreground bg-white/40 dark:bg-white/5">
-          <div className="font-medium text-foreground">DDL sugerido para Supabase</div>
-          <p className="mt-1">
-            Copiá/pegá en el SQL editor de Supabase. Luego, en Database → Replication, habilitá Realtime para estas tablas.
-          </p>
-          <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-muted p-3 overflow-auto">
-{`-- Tabla principal (ARS + USD separado)
-create table if not exists public.finance_entries (
-  room text not null,
-  id text primary key,
-  category text not null,
-  currency text not null default 'ARS',
-  amount numeric not null,
-  -- Campos legacy/compat (opcional pero recomendados si ya los usabas)
-  amountARS numeric not null default 0,
-  amountUSD numeric,
-  date text not null,
-  comment text,
-  createdAt bigint not null,
-  updatedAt bigint not null
-);
-
--- Presupuestos mensuales (ARS)
-create table if not exists public.finance_budgets (
-  room text not null,
-  id text primary key,
-  monthKey text not null,
-  category text not null,
-  limitARS numeric not null,
-  updatedAt bigint not null
-);
-
--- Índices útiles
-create index if not exists finance_entries_room_idx on public.finance_entries(room);
-create index if not exists finance_entries_room_date_idx on public.finance_entries(room, date);
-
-create index if not exists finance_budgets_room_idx on public.finance_budgets(room);
-create index if not exists finance_budgets_room_month_idx on public.finance_budgets(room, monthKey);
-
--- (Opcional) RLS
--- alter table public.finance_entries enable row level security;
--- alter table public.finance_budgets enable row level security;
--- create policy "room_read" on public.finance_entries for select using (true);
--- create policy "room_write" on public.finance_entries for insert with check (true);
--- create policy "room_update" on public.finance_entries for update using (true);
--- create policy "room_delete" on public.finance_entries for delete using (true);
--- create policy "budgets_read" on public.finance_budgets for select using (true);
--- create policy "budgets_write" on public.finance_budgets for insert with check (true);
--- create policy "budgets_update" on public.finance_budgets for update using (true);
--- create policy "budgets_delete" on public.finance_budgets for delete using (true);
-`}
-          </pre>
+        <div style={{ marginTop: 18, fontSize: 12, color: "rgba(0,0,0,0.62)" }}>
+          Tip: si querés colaboración real, activá Supabase y usen el mismo Room.
         </div>
       </div>
     </div>
   );
 }
 
-function SummaryKPI({
-  title,
-  value,
-  emphasis,
-}: {
-  title: string;
-  value: string;
-  emphasis?: boolean;
-}) {
+function SummaryKPI({ title, value, emphasis }: { title: string; value: string; emphasis?: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/40 bg-white/50 dark:bg-white/5 p-3 shadow-sm backdrop-blur">
-      <div className="text-xs text-muted-foreground">{title}</div>
-      <div className={`mt-1 text-lg font-semibold tabular-nums ${emphasis ? "" : ""}`}>{value}</div>
+    <div style={{ border: "1px solid rgba(0,0,0,0.10)", borderRadius: 14, padding: 12, background: "rgba(255,255,255,0.75)" }}>
+      <div style={{ fontSize: 12, color: "rgba(0,0,0,0.62)" }}>{title}</div>
+      <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800 }}>
+        {value}
+        {typeof emphasis === "boolean" ? "" : ""}
+      </div>
     </div>
   );
 }
