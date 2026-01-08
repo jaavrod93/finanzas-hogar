@@ -1,9 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "../App";
+import App from "./App";
 
 const el = document.getElementById("root");
-if (!el) throw new Error("No se encontró #root en public/index.html");
+if (!el) throw new Error("No se encontró #root");
 
 createRoot(el).render(
   <React.StrictMode>
